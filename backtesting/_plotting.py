@@ -12,8 +12,11 @@ import pandas as pd
 
 from bokeh.colors import RGB
 from bokeh.colors.named import (
-    lime as BULL_COLOR,
-    tomato as BEAR_COLOR
+#    lime as BULL_COLOR,
+#    tomato as BEAR_COLOR
+# change the color map for Taiwanese's convention
+    lime as BEAR_COLOR,
+    tomato as BULL_COLOR
 )
 from bokeh.plotting import figure as _figure
 from bokeh.models import (  # type: ignore
@@ -224,7 +227,7 @@ def plot(*, results: pd.Series,
                                    min_interval=10,
                                    bounds=(index[0] - pad,
                                            index[-1] + pad))) if index.size > 1 else {}
-    fig_ohlc = new_bokeh_figure(**_kwargs)
+    fig_ohlc = new_bokeh_figure(y_axis_type='log', **_kwargs)
     figs_above_ohlc, figs_below_ohlc = [], []
 
     source = ColumnDataSource(df)
@@ -334,7 +337,7 @@ return this.labels[index] || "";
         source.add(equity, source_key)
         fig = new_indicator_figure(
             y_axis_label=yaxis_label,
-            **({} if plot_drawdown else dict(height=110)))
+            **({} if plot_drawdown else dict(height=240, y_axis_type='log')))
 
         # High-watermark drawdown dents
         fig.patch('index', 'equity_dd',
@@ -481,9 +484,9 @@ return this.labels[index] || "";
 
     def _plot_ohlc():
         """Main OHLC bars"""
-        fig_ohlc.segment('index', 'High', 'index', 'Low', source=source, color="black")
+        fig_ohlc.segment('index', 'High', 'index', 'Low', source=source, color="black", legend_label='ohlc')
         r = fig_ohlc.vbar('index', BAR_WIDTH, 'Open', 'Close', source=source,
-                          line_color="black", fill_color=inc_cmap)
+                          line_color="black", fill_color=inc_cmap, legend_label='ohlc')
         return r
 
     def _plot_ohlc_trades():
@@ -493,7 +496,7 @@ return this.labels[index] || "";
         fig_ohlc.multi_line(xs='position_lines_xs', ys='position_lines_ys',
                             source=trade_source, line_color=trades_cmap,
                             legend_label=f'Trades ({len(trades)})',
-                            line_width=8, line_alpha=1, line_dash='dotted')
+                            line_width=2, line_alpha=1, line_dash='solid')
 
     def _plot_indicators():
         """Strategy indicators"""
