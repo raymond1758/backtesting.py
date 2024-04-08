@@ -6,6 +6,7 @@ module directly, e.g.
     from backtesting import Backtest, Strategy
 """
 import multiprocessing as mp
+import random
 import os
 import sys
 import warnings
@@ -22,12 +23,13 @@ import numpy as np
 import pandas as pd
 from numpy.random import default_rng
 
-try:
-    from tqdm.auto import tqdm as _tqdm
-    _tqdm = partial(_tqdm, leave=False)
-except ImportError:
-    def _tqdm(seq, **_):
-        return seq
+from tqdm.asyncio import tqdm
+#try:
+#    from tqdm.auto import tqdm as _tqdm
+#    _tqdm = partial(_tqdm, leave=False)
+#except ImportError:
+#    def _tqdm(seq, **_):
+#        return seq
 
 from ._plotting import plot  # noqa: I001
 from ._stats import compute_stats
@@ -1386,6 +1388,8 @@ class Backtest:
             if not param_combos:
                 raise ValueError('No admissible parameter combinations to test')
 
+            random.shuffle(param_combos)
+            
             if len(param_combos) > 300:
                 warnings.warn(f'Searching for best of {len(param_combos)} configurations.',
                               stacklevel=2)
@@ -1397,7 +1401,8 @@ class Backtest:
                                     names=next(iter(param_combos)).keys()))
 
             def _batch(seq):
-                n = np.clip(int(len(seq) // (os.cpu_count() or 1)), 1, 300)
+                #n = np.clip(int(len(seq) // (os.cpu_count() or 1)), 1, 300)
+                n = 2
                 for i in range(0, len(seq), n):
                     yield seq[i:i + n]
 
@@ -1406,25 +1411,41 @@ class Backtest:
             # With start method "fork", children processes will inherit parent address space
             # in a copy-on-write manner, achieving better performance/RAM benefit.
             backtest_uuid = np.random.random()
-            param_batches = list(_batch(param_combos))
+            print(f'# of parameter combos: {len(param_combos)}')
+            param_batches = list(_batch(param_combos))            
             Backtest._mp_backtests[backtest_uuid] = (self, param_batches, maximize)  # type: ignore
             try:
                 # If multiprocessing start method is 'fork' (i.e. on POSIX), use
                 # a pool of processes to compute results in parallel.
                 # Otherwise (i.e. on Windos), sequential computation will be "faster".
                 if mp.get_start_method(allow_none=False) == 'fork':
-                    with ProcessPoolExecutor() as executor:
-                        futures = [executor.submit(Backtest._mp_task, backtest_uuid, i)
-                                   for i in range(len(param_batches))]
-                        for future in _tqdm(as_completed(futures), total=len(futures),
-                                            desc='Backtest.optimize'):
-                            batch_index, values = future.result()
-                            for value, params in zip(values, param_batches[batch_index]):
-                                heatmap[tuple(params.values())] = value
+                    print('loop parallel futures')
+                    with tqdm(total=len(param_batches), dynamic_ncols=True) as pb:
+                        # Define a function to update the progress bar
+                        def update_progress():
+                            pb.update(1)                            
+                
+                        with ProcessPoolExecutor(max_workers=os.cpu_count()) as executor:
+                            # Submit tasks to the executor and map them to the task parameters
+                            futures = [executor.submit(Backtest._mp_task, backtest_uuid, i) for i in range(len(param_batches))]
+                            
+                            # Use as_completed to iterate over completed futures
+                            for future in as_completed(futures):
+                                # Call the update_progress function upon completion of each future
+                                batch_index, values = future.result()
+                                update_progress()                
+                                for value, params in zip(values, param_batches[batch_index]):
+                                    heatmap[tuple(params.values())] = value
+                                    
+                        #for future in tqdm(as_completed(futures), total=len(futures), desc='Backtest.optimize'):
+                        #    batch_index, values = future.result()
+                        #    for value, params in zip(values, param_batches[batch_index]):
+                        #        heatmap[tuple(params.values())] = value
                 else:
                     if os.name == 'posix':
                         warnings.warn("For multiprocessing support in `Backtest.optimize()` "
                                       "set multiprocessing start method to 'fork'.")
+                    print ('sequential loop')
                     for batch_index in _tqdm(range(len(param_batches))):
                         _, values = Backtest._mp_task(backtest_uuid, batch_index)
                         for value, params in zip(values, param_batches[batch_index]):
@@ -1485,7 +1506,7 @@ class Backtest:
 
             # np.inf/np.nan breaks sklearn, np.finfo(float).max breaks skopt.plots.plot_objective
             INVALID = 1e300
-            progress = iter(_tqdm(repeat(None), total=max_tries, desc='Backtest.optimize'))
+            progress = iter(tqdm(repeat(None), total=max_tries, desc='Backtest.optimize'))
 
             @use_named_args(dimensions=dimensions)
             def objective_function(**params):

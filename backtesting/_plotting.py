@@ -392,7 +392,7 @@ return this.labels[index] || "";
         drawdown = equity_data['DrawdownPct']
         argmax = drawdown.idxmax()
         source.add(drawdown, 'drawdown')
-        r = fig.line('index', 'drawdown', source=source, line_width=1.3)
+        r = fig.line('index', 'drawdown', source=source, line_width=3.3)
         fig.scatter(argmax, drawdown[argmax],
                     legend_label='Peak (-{:.1f}%)'.format(100 * drawdown[argmax]),
                     color='red', size=8)
