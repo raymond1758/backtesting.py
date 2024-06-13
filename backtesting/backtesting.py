@@ -1388,6 +1388,7 @@ class Backtest:
             if not param_combos:
                 raise ValueError('No admissible parameter combinations to test')
 
+            # randomize parameter combos to prevent unbalance cpu resource utilization
             random.shuffle(param_combos)
             
             if len(param_combos) > 300:
@@ -1400,9 +1401,8 @@ class Backtest:
                                     [p.values() for p in param_combos],
                                     names=next(iter(param_combos)).keys()))
 
-            def _batch(seq):
-                #n = np.clip(int(len(seq) // (os.cpu_count() or 1)), 1, 300)
-                n = 2
+            def _batch(seq, max_batch_size: int = 300):
+                n = np.clip(int(len(seq) // (os.cpu_count() or 1)), 1, max_batch_size)
                 for i in range(0, len(seq), n):
                     yield seq[i:i + n]
 
@@ -1412,14 +1412,13 @@ class Backtest:
             # in a copy-on-write manner, achieving better performance/RAM benefit.
             backtest_uuid = np.random.random()
             print(f'# of parameter combos: {len(param_combos)}')
-            param_batches = list(_batch(param_combos))            
+            param_batches = list(_batch(param_combos, 3))            
             Backtest._mp_backtests[backtest_uuid] = (self, param_batches, maximize)  # type: ignore
             try:
                 # If multiprocessing start method is 'fork' (i.e. on POSIX), use
                 # a pool of processes to compute results in parallel.
                 # Otherwise (i.e. on Windos), sequential computation will be "faster".
                 if mp.get_start_method(allow_none=False) == 'fork':
-                    print('loop parallel futures')
                     with tqdm(total=len(param_batches), dynamic_ncols=True) as pb:
                         # Define a function to update the progress bar
                         def update_progress():
@@ -1445,7 +1444,6 @@ class Backtest:
                     if os.name == 'posix':
                         warnings.warn("For multiprocessing support in `Backtest.optimize()` "
                                       "set multiprocessing start method to 'fork'.")
-                    print ('sequential loop')
                     for batch_index in _tqdm(range(len(param_batches))):
                         _, values = Backtest._mp_task(backtest_uuid, batch_index)
                         for value, params in zip(values, param_batches[batch_index]):

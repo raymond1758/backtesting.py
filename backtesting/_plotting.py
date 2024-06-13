@@ -35,7 +35,7 @@ try:
     from bokeh.models import CustomJSTickFormatter
 except ImportError:  # Bokeh < 3.0
     from bokeh.models import FuncTickFormatter as CustomJSTickFormatter  # type: ignore
-from bokeh.io import output_notebook, output_file, show
+from bokeh.io import output_notebook, output_file, curdoc, show
 from bokeh.io.state import curstate
 from bokeh.layouts import gridplot
 from bokeh.palettes import Category10
@@ -293,7 +293,7 @@ return this.labels[index] || "";
             tooltips = [("#", "@index")] + tooltips
         fig.add_tools(HoverTool(
             point_policy='follow_mouse',
-            renderers=renderers, formatters=formatters,
+            renderers=renderers, formatters=formatters, 
             tooltips=tooltips, mode='vline' if vline else 'mouse'))
 
     def _plot_equity_section(is_return=False):
@@ -337,7 +337,7 @@ return this.labels[index] || "";
         source.add(equity, source_key)
         fig = new_indicator_figure(
             y_axis_label=yaxis_label,
-            **({} if plot_drawdown else dict(height=240, y_axis_type='log')))
+            **({} if plot_drawdown else dict(height=400, y_axis_type='log')))
 
         # High-watermark drawdown dents
         fig.patch('index', 'equity_dd',
@@ -392,7 +392,7 @@ return this.labels[index] || "";
         drawdown = equity_data['DrawdownPct']
         argmax = drawdown.idxmax()
         source.add(drawdown, 'drawdown')
-        r = fig.line('index', 'drawdown', source=source, line_width=3.3)
+        r = fig.line('index', 'drawdown', source=source, line_width=1.0)
         fig.scatter(argmax, drawdown[argmax],
                     legend_label='Peak (-{:.1f}%)'.format(100 * drawdown[argmax]),
                     color='red', size=8)
@@ -486,7 +486,7 @@ return this.labels[index] || "";
         """Main OHLC bars"""
         fig_ohlc.segment('index', 'High', 'index', 'Low', source=source, color="black", legend_label='ohlc')
         r = fig_ohlc.vbar('index', BAR_WIDTH, 'Open', 'Close', source=source,
-                          line_color="black", fill_color=inc_cmap, legend_label='ohlc')
+                          line_color=None, fill_color=inc_cmap, legend_label='ohlc')
         return r
 
     def _plot_ohlc_trades():
@@ -668,6 +668,7 @@ return this.labels[index] || "";
         merge_tools=True,
         **kwargs  # type: ignore
     )
+    #curdoc().theme = 'dark_minimal'
     show(fig, browser=None if open_browser else 'none')
     return fig
 
