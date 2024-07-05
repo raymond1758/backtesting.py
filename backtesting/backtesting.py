@@ -701,12 +701,14 @@ class Trade:
 
 class _Broker:
     def __init__(self, *, data, cash, commission, margin,
-                 trade_on_close, hedging, exclusive_orders, index):
+                 trade_on_close, hedging, exclusive_orders, index, max_tx_ratio):
         assert 0 < cash, f"cash should be >0, is {cash}"
         assert -.1 <= commission < .1, \
             ("commission should be between -10% "
              f"(e.g. market-maker's rebates) and 10% (fees), is {commission}")
         assert 0 < margin <= 1, f"margin should be between 0 and 1, is {margin}"
+        assert 0 < max_tx_ratio <= 1, f"max_tx_ratio should be between 0 and 1, is {max_tx_ratio}"
+        
         self._data: _Data = data
         self._cash = cash
         self._commission = commission
@@ -720,6 +722,7 @@ class _Broker:
         self.trades: List[Trade] = []
         self.position = Position(self)
         self.closed_trades: List[Trade] = []
+        self.max_tx_ratio = max_tx_ratio
 
     def __repr__(self):
         return f'<Broker: {self._cash:.0f}{self.position.pl:+.1f} ({len(self.trades)} trades)>'
@@ -900,7 +903,7 @@ class _Broker:
                 size = copysign(int((self.margin_available * self._leverage * abs(size))
                                     // adjusted_price), size)
                 # raymond limit the size to reasonable qty based on Volume
-                size = copysign(min(int(self._data.Volume[-1] * 1e-3), abs(size)), size)
+                size = copysign(min(int(self._data.Volume[-1] * self.max_tx_ratio), abs(size)), size)
                 
                 # Not enough cash/margin even for a single unit
                 if not size:
@@ -1035,7 +1038,8 @@ class Backtest:
                  margin: float = 1.,
                  trade_on_close=False,
                  hedging=False,
-                 exclusive_orders=False
+                 exclusive_orders=False,
+                 max_tx_ratio: float = 1e-3,
                  ):
         """
         Initialize a backtest. Requires data and a strategy to test.
@@ -1136,6 +1140,7 @@ class Backtest:
             _Broker, cash=cash, commission=commission, margin=margin,
             trade_on_close=trade_on_close, hedging=hedging,
             exclusive_orders=exclusive_orders, index=data.index,
+            max_tx_ratio=max_tx_ratio,
         )
         self._strategy = strategy
         self._results: Optional[pd.Series] = None
