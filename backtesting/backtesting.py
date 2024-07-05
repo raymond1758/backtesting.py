@@ -819,7 +819,7 @@ class _Broker:
         open, high, low = data.Open[-1], data.High[-1], data.Low[-1]
         prev_close = data.Close[-2]
         reprocess_orders = False
-
+        
         # Process orders
         for order in list(self.orders):  # type: Order
 
@@ -899,6 +899,9 @@ class _Broker:
             if -1 < size < 1:
                 size = copysign(int((self.margin_available * self._leverage * abs(size))
                                     // adjusted_price), size)
+                # raymond limit the size to reasonable qty based on Volume
+                size = copysign(min(int(self._data.Volume[-1] * 1e-3), abs(size)), size)
+                
                 # Not enough cash/margin even for a single unit
                 if not size:
                     self.orders.remove(order)
@@ -1094,7 +1097,8 @@ class Backtest:
         if (not isinstance(data.index, pd.DatetimeIndex) and
             not isinstance(data.index, pd.RangeIndex) and
             # Numeric index with most large numbers
-            (data.index.is_numeric() and
+            #(data.index.is_numeric() and
+            (pd.api.types.is_any_real_numeric_dtype(data.index.dtype) and
              (data.index > pd.Timestamp('1975').timestamp()).mean() > .8)):
             try:
                 data.index = pd.to_datetime(data.index, infer_datetime_format=True)
