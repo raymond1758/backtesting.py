@@ -707,7 +707,7 @@ class _Broker:
             ("commission should be between -10% "
              f"(e.g. market-maker's rebates) and 10% (fees), is {commission}")
         assert 0 < margin <= 1, f"margin should be between 0 and 1, is {margin}"
-        assert 0 < max_tx_ratio <= 1, f"max_tx_ratio should be between 0 and 1, is {max_tx_ratio}"
+        assert max_tx_ratio == np.inf or 0 < max_tx_ratio <= 1, f"max_tx_ratio should be between 0 and 1, is {max_tx_ratio}"
         
         self._data: _Data = data
         self._cash = cash
@@ -903,7 +903,8 @@ class _Broker:
                 size = copysign(int((self.margin_available * self._leverage * abs(size))
                                     // adjusted_price), size)
                 # raymond limit the size to reasonable qty based on Volume
-                size = copysign(min(int(self._data.Volume[-1] * self.max_tx_ratio), abs(size)), size)
+                if self.max_tx_ratio != np.inf:
+                    size = copysign(min(int(self._data.Volume[-1] * self.max_tx_ratio), abs(size)), size)
                 
                 # Not enough cash/margin even for a single unit
                 if not size:
@@ -1039,7 +1040,7 @@ class Backtest:
                  trade_on_close=False,
                  hedging=False,
                  exclusive_orders=False,
-                 max_tx_ratio: float = 1e-3,
+                 max_tx_ratio: float = np.inf,
                  ):
         """
         Initialize a backtest. Requires data and a strategy to test.
